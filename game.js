@@ -42,7 +42,13 @@
     placeCore(); updateHud();
   }
 
+  async function requestLandscape() {
+    if (!matchMedia('(max-width: 900px)').matches || !screen.orientation?.lock) return;
+    try { await screen.orientation.lock('landscape'); } catch { /* Safari показывает подсказку повернуть телефон. */ }
+  }
+
   function start() {
+    void requestLandscape();
     reset(); state = 'playing'; document.querySelectorAll('.overlay').forEach(el => el.classList.remove('visible')); last = performance.now();
     tone(240, .08, 'square'); setTimeout(() => tone(480, .1, 'square'), 80); cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   }
@@ -173,5 +179,8 @@
   document.querySelectorAll('[data-dir]').forEach(btn=>{const dir=btn.dataset.dir;btn.addEventListener('pointerdown',e=>{e.preventDefault();keys.add(dir);btn.setPointerCapture(e.pointerId);});btn.addEventListener('pointerup',()=>keys.delete(dir));btn.addEventListener('pointercancel',()=>keys.delete(dir));});
   document.querySelector('#startButton').addEventListener('click',start);document.querySelector('#restartButton').addEventListener('click',start);document.querySelector('#resumeButton').addEventListener('click',togglePause);
   ui.sound.addEventListener('click',()=>{muted=!muted;ui.sound.classList.toggle('muted',muted);ui.sound.textContent=muted?'○ БЕЗ ЗВУКА':'◉ ЗВУК';});
-  addEventListener('resize',resize);resize();player.x=width/2;player.y=height/2;placeCore();draw();
+  addEventListener('resize',resize);
+  addEventListener('orientationchange',()=>setTimeout(resize,150));
+  window.visualViewport?.addEventListener('resize',resize);
+  resize();player.x=width/2;player.y=height/2;placeCore();draw();
 })();
