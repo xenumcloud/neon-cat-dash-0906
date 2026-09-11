@@ -29,6 +29,10 @@ h2 { margin:0 0 18px; text-transform:uppercase; font-size:clamp(36px,6vh,68px); 
 footer { display:flex; justify-content:center; align-items:center; gap:18px; color:#4e556f; font-size:8px; font-weight:800; letter-spacing:.2em; } footer i { width:3px; height:3px; border-radius:50%; background:#343a56; }
 .touch-controls { display:none; position:absolute; z-index:3; left:18px; bottom:18px; align-items:center; gap:5px; }.touch-controls div { display:flex; flex-direction:column; gap:5px; }.touch-controls button { width:48px; height:48px; border:1px solid #6ff7ed55; border-radius:50%; background:#10162bcc; color:#bffefa; font-size:18px; touch-action:none; }
 .rotate-notice { display:none; }
+@media (pointer:coarse), (hover:none) {
+  .touch-controls { display:flex; }
+  .controls { display:none; }
+}
 @media (max-width:700px) { .game-shell{padding:16px 12px 10px;gap:10px}.touch-controls{display:flex}.panel{padding:28px 22px}.controls{display:none}footer{display:none}.hud{padding:14px}.topbar{align-items:center}.eyebrow{display:none}.arena-wrap{min-height:0} }
 @media (max-height:660px) { .game-shell{padding-top:12px}.panel{padding:24px}.description{margin-bottom:16px}.topbar h1{font-size:25px} }
 @media (max-width:700px) and (orientation:portrait) {
