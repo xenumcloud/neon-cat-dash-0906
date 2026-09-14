@@ -6,14 +6,17 @@
   const ui = {
     score: document.querySelector('#score'), multiplier: document.querySelector('#multiplier'), best: document.querySelector('#best'),
     start: document.querySelector('#startScreen'), pause: document.querySelector('#pauseScreen'), over: document.querySelector('#gameOverScreen'),
-    finalScore: document.querySelector('#finalScore'), finalCores: document.querySelector('#finalCores'), sound: document.querySelector('#soundButton')
+    finalScore: document.querySelector('#finalScore'), finalCores: document.querySelector('#finalCores'), sound: document.querySelector('#soundButton'),
+    powerStatus: document.querySelector('#powerStatus'), powerTimer: document.querySelector('#powerTimer')
   };
 
   let width = 900, height = 560, raf = 0, last = 0, state = 'menu', score = 0, cores = 0, combo = 1, comboTimer = 0;
   let muted = false, audio = null, shake = 0, spawnTimer = 0, coreTimer = 0, elapsed = 0, deathTime = 0, killer = null;
-  const keys = new Set(), enemies = [], particles = [], stars = [];
+  let powerTimer = 0, proteinCooldown = 0;
+  const keys = new Set(), enemies = [], particles = [], dogBits = [], stars = [];
   const player = { x: 0, y: 0, r: 10, speed: 285, trail: [] };
   const core = { x: 0, y: 0, r: 11, pulse: 0 };
+  const protein = { x: 0, y: 0, r: 14, pulse: 0, active: false };
   let best = Number(localStorage.getItem('neon-dash-best') || 0);
   ui.best.textContent = String(best).padStart(5, '0');
 
@@ -36,9 +39,18 @@
     core.x = 60 + Math.random() * (width - 120); core.y = 80 + Math.random() * (height - 140); core.pulse = 0;
   }
 
+  function placeProtein() {
+    protein.x = 70 + Math.random() * Math.max(40, width - 140);
+    protein.y = 90 + Math.random() * Math.max(40, height - 170);
+    protein.pulse = 0;
+    protein.active = true;
+  }
+
   function reset() {
     score = 0; cores = 0; combo = 1; comboTimer = 0; elapsed = 0; spawnTimer = 1.2; coreTimer = 0;
-    deathTime = 0; killer = null; enemies.length = 0; particles.length = 0; player.trail.length = 0; player.x = width / 2; player.y = height / 2;
+    deathTime = 0; killer = null; powerTimer = 0; proteinCooldown = 7; protein.active = false;
+    enemies.length = 0; particles.length = 0; dogBits.length = 0; player.trail.length = 0; player.x = width / 2; player.y = height / 2;
+    ui.powerStatus.classList.remove('active');
     placeCore(); updateHud();
   }
 
@@ -69,6 +81,31 @@
     for (let i = 0; i < amount; i++) { const a = Math.random() * Math.PI * 2, speed = 40 + Math.random() * 170; particles.push({ x, y, vx: Math.cos(a)*speed, vy: Math.sin(a)*speed, life: .35+Math.random()*.5, max: .85, color, size: 1+Math.random()*3 }); }
   }
 
+  function puppyYelp() {
+    if (muted) return;
+    audio ||= new (window.AudioContext || window.webkitAudioContext)();
+    const now = audio.currentTime;
+    [0, .055].forEach((delay, index) => {
+      const osc = audio.createOscillator(), gain = audio.createGain();
+      osc.type = index ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(1050 - index * 180, now + delay);
+      osc.frequency.exponentialRampToValueAtTime(360, now + delay + .2);
+      gain.gain.setValueAtTime(.0001, now + delay);
+      gain.gain.exponentialRampToValueAtTime(.055, now + delay + .018);
+      gain.gain.exponentialRampToValueAtTime(.0001, now + delay + .23);
+      osc.connect(gain).connect(audio.destination); osc.start(now + delay); osc.stop(now + delay + .24);
+    });
+  }
+
+  function scatterDog(e) {
+    burst(e.x, e.y, '#ff4f91', 30);
+    for (let i = 0; i < 9; i++) {
+      const angle = Math.random() * Math.PI * 2, speed = 100 + Math.random() * 240;
+      dogBits.push({ x:e.x, y:e.y, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed, angle, spin:(Math.random()-.5)*15, life:.65+Math.random()*.45, max:1.1, size:3+Math.random()*5 });
+    }
+    puppyYelp(); shake = 8; score += 150;
+  }
+
   function updateHud() { ui.score.textContent = String(Math.floor(score)).padStart(5, '0'); ui.multiplier.textContent = `×${combo}`; }
 
   function gameOver(catcher) {
@@ -81,10 +118,28 @@
 
   function update(dt) {
     elapsed += dt; score += dt * (7 + combo * 2); comboTimer -= dt;
+    if (powerTimer > 0) {
+      powerTimer = Math.max(0, powerTimer - dt);
+      ui.powerTimer.textContent = powerTimer.toFixed(1);
+      ui.powerStatus.classList.toggle('active', powerTimer > 0);
+    }
+    if (!protein.active) {
+      proteinCooldown -= dt;
+      if (proteinCooldown <= 0) placeProtein();
+    } else {
+      protein.pulse += dt * 5;
+      if (Math.hypot(player.x-protein.x, player.y-protein.y) < player.r+protein.r+5) {
+        protein.active = false; proteinCooldown = 18 + Math.random() * 10; powerTimer = 20;
+        ui.powerTimer.textContent = '20.0'; ui.powerStatus.classList.add('active');
+        burst(protein.x, protein.y, '#ffe16b', 42); tone(330, .12, 'square', .04);
+        setTimeout(() => tone(660, .16, 'triangle', .05), 90);
+      }
+    }
     if (comboTimer <= 0 && combo > 1) { combo = 1; updateHud(); }
     let dx = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0), dy = (keys.has('down') ? 1 : 0) - (keys.has('up') ? 1 : 0);
     if (dx || dy) { const m = Math.hypot(dx,dy); dx/=m; dy/=m; }
-    player.x = Math.max(player.r, Math.min(width-player.r, player.x + dx*player.speed*dt)); player.y = Math.max(55+player.r, Math.min(height-player.r, player.y + dy*player.speed*dt));
+    const speedBoost = powerTimer > 0 ? 1.22 : 1;
+    player.x = Math.max(player.r, Math.min(width-player.r, player.x + dx*player.speed*speedBoost*dt)); player.y = Math.max(55+player.r, Math.min(height-player.r, player.y + dy*player.speed*speedBoost*dt));
     player.trail.unshift({x:player.x,y:player.y}); if(player.trail.length>15) player.trail.pop();
     core.pulse += dt * 5; coreTimer += dt;
     if (Math.hypot(player.x-core.x, player.y-core.y) < player.r+core.r+4) {
@@ -94,12 +149,17 @@
     for (let i = enemies.length - 1; i >= 0; i--) {
       const e = enemies[i];
       e.x += e.vx * dt; e.y += e.vy * dt; e.phase += dt * 5; e.age += dt;
-      if (Math.hypot(player.x-e.x,player.y-e.y) < player.r+e.r-2) gameOver(e);
+      if (Math.hypot(player.x-e.x,player.y-e.y) < player.r+e.r-2) {
+        if (powerTimer > 0) { scatterDog(e); enemies.splice(i, 1); continue; }
+        gameOver(e);
+      }
       const outside = e.x < -80 || e.x > width + 80 || e.y < -80 || e.y > height + 80;
       if (e.age > 20 || (e.age > 3 && outside)) enemies.splice(i, 1);
     }
     particles.forEach(p => { p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.97;p.vy*=.97;p.life-=dt; });
     for(let i=particles.length-1;i>=0;i--) if(particles[i].life<=0) particles.splice(i,1);
+    dogBits.forEach(p => { p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=210*dt;p.angle+=p.spin*dt;p.life-=dt; });
+    for(let i=dogBits.length-1;i>=0;i--) if(dogBits[i].life<=0) dogBits.splice(i,1);
     updateHud();
   }
 
@@ -122,13 +182,29 @@
     [[-6,-3],[-1,-1],[4,-4],[7,0],[-4,1],[2,1]].forEach(([x,y]) => { ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill(); });
     ctx.shadowBlur = 0; ctx.fillStyle = '#ff4f91'; ctx.beginPath(); ctx.arc(0, 6, 2.2, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-    player.trail.forEach((t,i)=>{ctx.beginPath();ctx.arc(t.x,t.y,Math.max(1,player.r*(1-i/player.trail.length)*.65),0,Math.PI*2);ctx.fillStyle=`rgba(111,247,237,${.23*(1-i/player.trail.length)})`;ctx.fill();});
+    if (protein.active) {
+      ctx.save(); ctx.translate(protein.x, protein.y + Math.sin(protein.pulse) * 2);
+      ctx.shadowBlur = 30; ctx.shadowColor = '#ffe16b'; ctx.strokeStyle = '#ffe16b'; ctx.lineWidth = 2;
+      ctx.fillStyle = '#592b79'; ctx.beginPath(); ctx.moveTo(-15,-3); ctx.lineTo(15,-3); ctx.lineTo(10,11); ctx.quadraticCurveTo(0,15,-10,11); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fff3a1'; ctx.beginPath(); ctx.ellipse(0,-3,15,5,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.shadowBlur = 8; ctx.shadowColor = '#a855f7'; ctx.fillStyle = '#a855f7';
+      [-8,-3,3,8].forEach((x,index)=>{ctx.beginPath();ctx.arc(x,-3+(index%2)*2,3,0,Math.PI*2);ctx.fill();});
+      ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.font = '900 9px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('P',0,8);
+      ctx.restore();
+    }
+    player.trail.forEach((t,i)=>{ctx.beginPath();ctx.arc(t.x,t.y,Math.max(1,player.r*(1-i/player.trail.length)*.65),0,Math.PI*2);ctx.fillStyle=powerTimer>0?`rgba(255,225,107,${.34*(1-i/player.trail.length)})`:`rgba(111,247,237,${.23*(1-i/player.trail.length)})`;ctx.fill();});
     const deathAge = state === 'over' ? (performance.now() - deathTime) / 1000 : 0;
     ctx.save();
     ctx.translate(player.x, player.y);
     if (state === 'over') ctx.rotate(Math.sin(deathAge * 24) * Math.max(0, .22 - deathAge * .16));
-    ctx.shadowBlur = 20; ctx.shadowColor = '#6ff7ed';
-    ctx.strokeStyle = '#6ff7ed'; ctx.fillStyle = '#bffff9'; ctx.lineWidth = 2;
+    if (powerTimer > 0) {
+      const flutter = Math.sin(elapsed * 12) * 2;
+      ctx.shadowBlur = 24; ctx.shadowColor = '#ff315d'; ctx.fillStyle = '#e31945'; ctx.strokeStyle = '#ff7793'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(-7,-5); ctx.quadraticCurveTo(-20,2+flutter,-18,18); ctx.lineTo(-4,10); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0,0,18+Math.sin(elapsed*8)*2,0,Math.PI*2); ctx.strokeStyle='#ffe16b66'; ctx.lineWidth=2; ctx.stroke();
+    }
+    ctx.shadowBlur = powerTimer > 0 ? 30 : 20; ctx.shadowColor = powerTimer > 0 ? '#ffe16b' : '#6ff7ed';
+    ctx.strokeStyle = powerTimer > 0 ? '#ffe16b' : '#6ff7ed'; ctx.fillStyle = powerTimer > 0 ? '#fff7bd' : '#bffff9'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(8, 5, 8, -.7, 1.6); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(-9, -5); ctx.lineTo(-7, -14); ctx.lineTo(-1, -8); ctx.lineTo(5, -14); ctx.lineTo(9, -5); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
@@ -145,6 +221,10 @@
       });
     }
     ctx.fillStyle = '#ff4f91'; ctx.beginPath(); ctx.moveTo(-2, 3); ctx.lineTo(2, 3); ctx.lineTo(0, 5); ctx.closePath(); ctx.fill();
+    if (powerTimer > 0) {
+      ctx.fillStyle='#e31945';ctx.strokeStyle='#ffe16b';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(-4,7);ctx.lineTo(0,5);ctx.lineTo(4,7);ctx.lineTo(0,11);ctx.closePath();ctx.fill();ctx.stroke();
+    }
     ctx.strokeStyle = '#d9fffb'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(-5, 4); ctx.lineTo(-14, 2); ctx.moveTo(-5, 6); ctx.lineTo(-14, 7); ctx.moveTo(5, 4); ctx.lineTo(14, 2); ctx.moveTo(5, 6); ctx.lineTo(14, 7); ctx.stroke();
     ctx.restore();
@@ -168,6 +248,11 @@
         ctx.strokeStyle = '#101329'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, 4); ctx.lineTo(0, 6); ctx.arc(2, 6, 2, Math.PI, 0); ctx.stroke();
       }
       ctx.restore();
+    });
+    dogBits.forEach(p=>{
+      ctx.save();ctx.globalAlpha=Math.max(0,p.life/p.max);ctx.translate(p.x,p.y);ctx.rotate(p.angle);
+      ctx.shadowBlur=9;ctx.shadowColor='#ff4f91';ctx.fillStyle='#ff82ad';ctx.strokeStyle='#ff4f91';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(-p.size,-p.size*.7);ctx.lineTo(p.size,0);ctx.lineTo(-p.size,p.size*.7);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
     });
     particles.forEach(p=>{ctx.globalAlpha=Math.max(0,p.life/p.max);ctx.fillStyle=p.color;ctx.fillRect(p.x,p.y,p.size,p.size);});ctx.globalAlpha=1;ctx.restore();
   }
