@@ -7,16 +7,19 @@
     score: document.querySelector('#score'), multiplier: document.querySelector('#multiplier'), best: document.querySelector('#best'),
     start: document.querySelector('#startScreen'), pause: document.querySelector('#pauseScreen'), over: document.querySelector('#gameOverScreen'),
     finalScore: document.querySelector('#finalScore'), finalCores: document.querySelector('#finalCores'), sound: document.querySelector('#soundButton'),
-    powerStatus: document.querySelector('#powerStatus'), powerTimer: document.querySelector('#powerTimer'), powerLabel: document.querySelector('#powerLabel')
+    powerStatus: document.querySelector('#powerStatus'), powerTimer: document.querySelector('#powerTimer'), powerLabel: document.querySelector('#powerLabel'),
+    boneStatus: document.querySelector('#boneStatus'), boneLabel: document.querySelector('#boneLabel'), boneCount: document.querySelector('#boneCount')
   };
 
   let width = 900, height = 560, raf = 0, last = 0, state = 'menu', score = 0, cores = 0, combo = 1, comboTimer = 0;
   let muted = false, audio = null, shake = 0, spawnTimer = 0, coreTimer = 0, elapsed = 0, deathTime = 0, killer = null;
   let powerTimer = 0, proteinCooldown = 0, giantTimer = 0, giantTriggered = false;
-  const keys = new Set(), enemies = [], particles = [], dogBits = [], stars = [];
+  let boneCount = 0, boneCooldown = 0, boneFeastTimer = 0;
+  const keys = new Set(), enemies = [], particles = [], dogBits = [], baitBones = [], stars = [];
   const player = { x: 0, y: 0, r: 10, speed: 285, trail: [] };
   const core = { x: 0, y: 0, r: 11, pulse: 0 };
   const protein = { x: 0, y: 0, r: 14, pulse: 0, active: false };
+  const bone = { x: 0, y: 0, r: 10, pulse: 0, active: false };
   let best = Number(localStorage.getItem('neon-dash-best') || 0);
   ui.best.textContent = String(best).padStart(5, '0');
 
@@ -46,11 +49,19 @@
     protein.active = true;
   }
 
+  function placeBone() {
+    bone.x = 55 + Math.random() * Math.max(50, width - 110);
+    bone.y = 75 + Math.random() * Math.max(45, height - 145);
+    bone.pulse = Math.random() * Math.PI * 2; bone.active = true;
+  }
+
   function reset() {
     score = 0; cores = 0; combo = 1; comboTimer = 0; elapsed = 0; spawnTimer = 1.2; coreTimer = 0;
     deathTime = 0; killer = null; powerTimer = 0; proteinCooldown = 7; protein.active = false; giantTimer = 0; giantTriggered = false;
-    enemies.length = 0; particles.length = 0; dogBits.length = 0; player.trail.length = 0; player.x = width / 2; player.y = height / 2;
+    boneCount = 0; boneCooldown = 2.5; boneFeastTimer = 0; bone.active = false;
+    enemies.length = 0; particles.length = 0; dogBits.length = 0; baitBones.length = 0; player.trail.length = 0; player.x = width / 2; player.y = height / 2;
     ui.powerStatus.classList.remove('active');
+    ui.boneStatus.classList.remove('feast'); ui.boneLabel.textContent = '🦴 КОСТОЧКИ'; ui.boneCount.textContent = '0/10';
     placeCore(); updateHud();
   }
 
@@ -74,7 +85,7 @@
     const targetY = height * .2 + Math.random() * height * .6;
     const angle = Math.atan2(targetY - y, targetX - x);
     const speed = 55 + Math.min(72, elapsed * 1.55) + Math.random() * 18;
-    enemies.push({ x, y, r: 9 + Math.random() * 5, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, phase: Math.random() * 7, age: 0 });
+    enemies.push({ x, y, r: 9 + Math.random() * 5, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, phase: Math.random() * 7, age: 0, eating: false, boneTarget: Math.floor(Math.random()*10) });
   }
 
   function burst(x, y, color, amount = 14) {
@@ -120,6 +131,22 @@
     tone(130, .25, 'sawtooth', .045); setTimeout(() => tone(260, .3, 'square', .04), 100);
   }
 
+  function startBoneFeast() {
+    boneCount = 0; boneFeastTimer = 10; bone.active = false; baitBones.length = 0;
+    for (let i = 0; i < 10; i++) {
+      baitBones.push({ x:55+Math.random()*Math.max(50,width-110), y:75+Math.random()*Math.max(45,height-145), angle:Math.random()*Math.PI, pulse:Math.random()*6 });
+    }
+    enemies.forEach((e,index)=>{e.boneTarget=index%baitBones.length;e.eating=false;});
+    ui.boneStatus.classList.add('feast'); ui.boneLabel.textContent = '🦴 КОСТЯНОЙ ПИР'; ui.boneCount.textContent = '10.0с';
+    baitBones.forEach(b=>burst(b.x,b.y,'#f5d8aa',5)); tone(190,.12,'square',.035); setTimeout(()=>tone(285,.16,'triangle',.035),80);
+  }
+
+  function endBoneFeast() {
+    boneFeastTimer = 0; baitBones.length = 0; boneCooldown = 2;
+    enemies.forEach(e=>{const angle=Math.random()*Math.PI*2,speed=70+Math.random()*45;e.vx=Math.cos(angle)*speed;e.vy=Math.sin(angle)*speed;e.eating=false;});
+    ui.boneStatus.classList.remove('feast'); ui.boneLabel.textContent = '🦴 КОСТОЧКИ'; ui.boneCount.textContent = '0/10';
+  }
+
   function updateHud() { ui.score.textContent = String(Math.floor(score)).padStart(5, '0'); ui.multiplier.textContent = `×${combo}`; }
 
   function gameOver(catcher) {
@@ -133,6 +160,20 @@
   function update(dt) {
     elapsed += dt; score += dt * (7 + combo * 2); comboTimer -= dt;
     if (!giantTriggered && score >= 5000) activateGiant();
+    if (boneFeastTimer > 0) {
+      boneFeastTimer = Math.max(0,boneFeastTimer-dt); ui.boneCount.textContent = `${boneFeastTimer.toFixed(1)}с`;
+      baitBones.forEach(b=>b.pulse+=dt*5);
+      if (boneFeastTimer === 0) endBoneFeast();
+    } else if (!bone.active) {
+      boneCooldown -= dt; if (boneCooldown <= 0) placeBone();
+    } else {
+      bone.pulse += dt*5;
+      if (Math.hypot(player.x-bone.x,player.y-bone.y) < player.r+bone.r+5) {
+        bone.active=false; boneCount++; score+=90; burst(bone.x,bone.y,'#f5d8aa',18); tone(240+boneCount*18,.09,'triangle',.03);
+        ui.boneCount.textContent = `${boneCount}/10`;
+        if (boneCount >= 10) startBoneFeast(); else boneCooldown = 2+Math.random()*2.5;
+      }
+    }
     if (giantTimer > 0) {
       giantTimer = Math.max(0, giantTimer - dt); player.x = width / 2; player.y = height / 2;
       ui.powerLabel.textContent = '🐾 ГИГАКОТ'; ui.powerTimer.textContent = giantTimer.toFixed(1);
@@ -173,6 +214,14 @@
     spawnTimer -= dt; if (spawnTimer <= 0) { spawnEnemy(); spawnTimer = Math.max(.34, 1.12 - elapsed*.012); }
     for (let i = enemies.length - 1; i >= 0; i--) {
       const e = enemies[i];
+      if (boneFeastTimer > 0 && baitBones.length) {
+        const target=baitBones[e.boneTarget%baitBones.length], bx=target.x-e.x, by=target.y-e.y, distance=Math.hypot(bx,by);
+        if (distance > 13) {
+          const feastSpeed=Math.max(72,Math.hypot(e.vx,e.vy));e.vx=bx/distance*feastSpeed;e.vy=by/distance*feastSpeed;e.eating=false;
+        } else {
+          e.vx=Math.sin(elapsed*8+e.phase)*3;e.vy=Math.cos(elapsed*7+e.phase)*3;e.eating=true;
+        }
+      } else e.eating=false;
       e.x += e.vx * dt; e.y += e.vy * dt; e.phase += dt * 5; e.age += dt;
       if (giantTimer > 0) {
         const top = 58 + e.r;
@@ -203,6 +252,13 @@
     stars.forEach(s=>{ctx.fillStyle=`rgba(125,151,200,${s.a})`;ctx.fillRect(s.x*width,s.y*height,s.s,s.s);});
   }
 
+  function drawBone(x,y,angle=0,scale=1,glow='#f5d8aa') {
+    ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.scale(scale,scale);ctx.shadowBlur=14;ctx.shadowColor=glow;ctx.strokeStyle='#8b684a';ctx.fillStyle='#f5d8aa';ctx.lineWidth=1;
+    ctx.fillRect(-7,-3,14,6);
+    [[-8,-4],[-8,4],[8,-4],[8,4]].forEach(([bx,by])=>{ctx.beginPath();ctx.arc(bx,by,4,0,Math.PI*2);ctx.fill();ctx.stroke();});
+    ctx.restore();
+  }
+
   function draw() {
     ctx.save(); if(shake>0){ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);shake*=.88;}
     ctx.clearRect(-20,-20,width+40,height+40); const g=ctx.createRadialGradient(width*.5,height*.4,0,width*.5,height*.4,Math.max(width,height)*.75);g.addColorStop(0,'#111735');g.addColorStop(1,'#050713');ctx.fillStyle=g;ctx.fillRect(0,0,width,height);drawGrid();
@@ -225,6 +281,8 @@
       ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.font = '900 9px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('P',0,8);
       ctx.restore();
     }
+    if (bone.active) drawBone(bone.x,bone.y+Math.sin(bone.pulse)*2,Math.sin(bone.pulse*.45)*.25,1,'#f5d8aa');
+    baitBones.forEach((b,index)=>drawBone(b.x,b.y+Math.sin(b.pulse+index)*1.5,b.angle,.85,'#ffb870'));
     player.trail.forEach((t,i)=>{ctx.beginPath();ctx.arc(t.x,t.y,Math.max(1,player.r*(1-i/player.trail.length)*.65),0,Math.PI*2);ctx.fillStyle=powerTimer>0?`rgba(255,225,107,${.34*(1-i/player.trail.length)})`:`rgba(111,247,237,${.23*(1-i/player.trail.length)})`;ctx.fill();});
     const deathAge = state === 'over' ? (performance.now() - deathTime) / 1000 : 0;
     ctx.save();
@@ -284,6 +342,10 @@
         ctx.fillStyle = '#ffd6e5'; ctx.beginPath(); ctx.ellipse(0, 4, 5, 4, 0, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#101329'; ctx.beginPath(); ctx.ellipse(0, 2.5, 2.2, 1.7, 0, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = '#101329'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, 4); ctx.lineTo(0, 6); ctx.arc(2, 6, 2, Math.PI, 0); ctx.stroke();
+      }
+      if (e.eating) {
+        ctx.fillStyle='#321322';ctx.beginPath();ctx.ellipse(0,6,4.5,2.7,0,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#f5d8aa';ctx.beginPath();ctx.arc(-6+Math.sin(elapsed*18+e.phase)*2,8,1.2,0,Math.PI*2);ctx.arc(6,7+Math.cos(elapsed*16)*2,1,0,Math.PI*2);ctx.fill();
       }
       ctx.restore();
     });
