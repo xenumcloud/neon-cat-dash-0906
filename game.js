@@ -7,12 +7,12 @@
     score: document.querySelector('#score'), multiplier: document.querySelector('#multiplier'), best: document.querySelector('#best'),
     start: document.querySelector('#startScreen'), pause: document.querySelector('#pauseScreen'), over: document.querySelector('#gameOverScreen'),
     finalScore: document.querySelector('#finalScore'), finalCores: document.querySelector('#finalCores'), sound: document.querySelector('#soundButton'),
-    powerStatus: document.querySelector('#powerStatus'), powerTimer: document.querySelector('#powerTimer')
+    powerStatus: document.querySelector('#powerStatus'), powerTimer: document.querySelector('#powerTimer'), powerLabel: document.querySelector('#powerLabel')
   };
 
   let width = 900, height = 560, raf = 0, last = 0, state = 'menu', score = 0, cores = 0, combo = 1, comboTimer = 0;
   let muted = false, audio = null, shake = 0, spawnTimer = 0, coreTimer = 0, elapsed = 0, deathTime = 0, killer = null;
-  let powerTimer = 0, proteinCooldown = 0;
+  let powerTimer = 0, proteinCooldown = 0, giantTimer = 0, giantTriggered = false;
   const keys = new Set(), enemies = [], particles = [], dogBits = [], stars = [];
   const player = { x: 0, y: 0, r: 10, speed: 285, trail: [] };
   const core = { x: 0, y: 0, r: 11, pulse: 0 };
@@ -48,7 +48,7 @@
 
   function reset() {
     score = 0; cores = 0; combo = 1; comboTimer = 0; elapsed = 0; spawnTimer = 1.2; coreTimer = 0;
-    deathTime = 0; killer = null; powerTimer = 0; proteinCooldown = 7; protein.active = false;
+    deathTime = 0; killer = null; powerTimer = 0; proteinCooldown = 7; protein.active = false; giantTimer = 0; giantTriggered = false;
     enemies.length = 0; particles.length = 0; dogBits.length = 0; player.trail.length = 0; player.x = width / 2; player.y = height / 2;
     ui.powerStatus.classList.remove('active');
     placeCore(); updateHud();
@@ -106,6 +106,20 @@
     puppyYelp(); shake = 8; score += 150;
   }
 
+  function activateGiant() {
+    giantTriggered = true; giantTimer = 10; player.x = width / 2; player.y = height / 2; shake = 18;
+    proteinCooldown = Math.max(proteinCooldown, 10);
+    ui.powerLabel.textContent = '🐾 ГИГАКОТ'; ui.powerTimer.textContent = '10.0'; ui.powerStatus.classList.add('active');
+    cores++; combo = 8; comboTimer = 4; score += 600;
+    burst(core.x, core.y, '#6ff7ed', 36); core.x = -1000; core.y = -1000;
+    if (protein.active) {
+      protein.active = false; powerTimer = Math.max(powerTimer, 20); proteinCooldown = 24;
+      burst(protein.x, protein.y, '#ffe16b', 42);
+    }
+    enemies.forEach(e => { e.vx *= .72; e.vy *= .72; });
+    tone(130, .25, 'sawtooth', .045); setTimeout(() => tone(260, .3, 'square', .04), 100);
+  }
+
   function updateHud() { ui.score.textContent = String(Math.floor(score)).padStart(5, '0'); ui.multiplier.textContent = `×${combo}`; }
 
   function gameOver(catcher) {
@@ -118,7 +132,16 @@
 
   function update(dt) {
     elapsed += dt; score += dt * (7 + combo * 2); comboTimer -= dt;
-    if (powerTimer > 0) {
+    if (!giantTriggered && score >= 5000) activateGiant();
+    if (giantTimer > 0) {
+      giantTimer = Math.max(0, giantTimer - dt); player.x = width / 2; player.y = height / 2;
+      ui.powerLabel.textContent = '🐾 ГИГАКОТ'; ui.powerTimer.textContent = giantTimer.toFixed(1);
+      if (giantTimer === 0) {
+        placeCore();
+        ui.powerLabel.textContent = '⚡ СУПЕРКОТ';
+        ui.powerStatus.classList.toggle('active', powerTimer > 0);
+      }
+    } else if (powerTimer > 0) {
       powerTimer = Math.max(0, powerTimer - dt);
       ui.powerTimer.textContent = powerTimer.toFixed(1);
       ui.powerStatus.classList.toggle('active', powerTimer > 0);
@@ -139,7 +162,9 @@
     let dx = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0), dy = (keys.has('down') ? 1 : 0) - (keys.has('up') ? 1 : 0);
     if (dx || dy) { const m = Math.hypot(dx,dy); dx/=m; dy/=m; }
     const speedBoost = powerTimer > 0 ? 1.22 : 1;
-    player.x = Math.max(player.r, Math.min(width-player.r, player.x + dx*player.speed*speedBoost*dt)); player.y = Math.max(55+player.r, Math.min(height-player.r, player.y + dy*player.speed*speedBoost*dt));
+    if (giantTimer <= 0) {
+      player.x = Math.max(player.r, Math.min(width-player.r, player.x + dx*player.speed*speedBoost*dt)); player.y = Math.max(55+player.r, Math.min(height-player.r, player.y + dy*player.speed*speedBoost*dt));
+    }
     player.trail.unshift({x:player.x,y:player.y}); if(player.trail.length>15) player.trail.pop();
     core.pulse += dt * 5; coreTimer += dt;
     if (Math.hypot(player.x-core.x, player.y-core.y) < player.r+core.r+4) {
@@ -149,12 +174,20 @@
     for (let i = enemies.length - 1; i >= 0; i--) {
       const e = enemies[i];
       e.x += e.vx * dt; e.y += e.vy * dt; e.phase += dt * 5; e.age += dt;
-      if (Math.hypot(player.x-e.x,player.y-e.y) < player.r+e.r-2) {
-        if (powerTimer > 0) { scatterDog(e); enemies.splice(i, 1); continue; }
+      if (giantTimer > 0) {
+        const top = 58 + e.r;
+        if (e.x < e.r) { e.x = e.r; e.vx = Math.abs(e.vx); }
+        if (e.x > width-e.r) { e.x = width-e.r; e.vx = -Math.abs(e.vx); }
+        if (e.y < top) { e.y = top; e.vy = Math.abs(e.vy); }
+        if (e.y > height-e.r) { e.y = height-e.r; e.vy = -Math.abs(e.vy); }
+      }
+      const hitRadius = giantTimer > 0 ? Math.max(width,height)*.42 : player.r;
+      if (Math.hypot(player.x-e.x,player.y-e.y) < hitRadius+e.r-2) {
+        if (powerTimer > 0 || giantTimer > 0) { scatterDog(e); enemies.splice(i, 1); continue; }
         gameOver(e);
       }
       const outside = e.x < -80 || e.x > width + 80 || e.y < -80 || e.y > height + 80;
-      if (e.age > 20 || (e.age > 3 && outside)) enemies.splice(i, 1);
+      if (giantTimer <= 0 && (e.age > 20 || (e.age > 3 && outside))) enemies.splice(i, 1);
     }
     particles.forEach(p => { p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.97;p.vy*=.97;p.life-=dt; });
     for(let i=particles.length-1;i>=0;i--) if(particles[i].life<=0) particles.splice(i,1);
@@ -196,6 +229,11 @@
     const deathAge = state === 'over' ? (performance.now() - deathTime) / 1000 : 0;
     ctx.save();
     ctx.translate(player.x, player.y);
+    if (giantTimer > 0) {
+      const targetScale = Math.max(width / 34, height / 25);
+      const growth = Math.min(1, (10 - giantTimer) / .45);
+      ctx.scale(1 + (targetScale - 1) * growth, 1 + (targetScale - 1) * growth);
+    }
     if (state === 'over') ctx.rotate(Math.sin(deathAge * 24) * Math.max(0, .22 - deathAge * .16));
     if (powerTimer > 0) {
       const flutter = Math.sin(elapsed * 12) * 2;
