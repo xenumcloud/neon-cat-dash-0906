@@ -13,7 +13,7 @@
 
   let width = 900, height = 560, raf = 0, last = 0, state = 'menu', score = 0, cores = 0, combo = 1, comboTimer = 0;
   let muted = false, audio = null, shake = 0, spawnTimer = 0, coreTimer = 0, elapsed = 0, deathTime = 0, killer = null;
-  let powerTimer = 0, proteinCooldown = 0, giantTimer = 0, nextGiantScore = 1000;
+  let powerTimer = 0, proteinCooldown = 0, giantTimer = 0, nextGiantScore = 5000;
   let boneCount = 0, boneCooldown = 0, boneFeastTimer = 0;
   const keys = new Set(), enemies = [], particles = [], dogBits = [], baitBones = [], stars = [];
   const player = { x: 0, y: 0, r: 10, speed: 285, trail: [] };
@@ -57,7 +57,7 @@
 
   function reset() {
     score = 0; cores = 0; combo = 1; comboTimer = 0; elapsed = 0; spawnTimer = 1.2; coreTimer = 0;
-    deathTime = 0; killer = null; powerTimer = 0; proteinCooldown = 7; protein.active = false; giantTimer = 0; nextGiantScore = 1000;
+    deathTime = 0; killer = null; powerTimer = 0; proteinCooldown = 7; protein.active = false; giantTimer = 0; nextGiantScore = 5000;
     boneCount = 0; boneCooldown = 2.5; boneFeastTimer = 0; bone.active = false;
     enemies.length = 0; particles.length = 0; dogBits.length = 0; baitBones.length = 0; player.trail.length = 0; player.x = width / 2; player.y = height / 2;
     ui.powerStatus.classList.remove('active');
@@ -118,7 +118,7 @@
   }
 
   function activateGiant() {
-    nextGiantScore += 1000; giantTimer = 10; player.x = width / 2; player.y = height / 2; shake = 18;
+    nextGiantScore += 5000; giantTimer = 10; player.x = width / 2; player.y = height / 2; shake = 18;
     proteinCooldown = Math.max(proteinCooldown, 10);
     ui.powerLabel.textContent = '🐾 ГИГАКОТ'; ui.powerTimer.textContent = '10.0'; ui.powerStatus.classList.add('active');
     cores++; combo = 8; comboTimer = 4; score += 600;
