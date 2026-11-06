@@ -118,9 +118,9 @@
   }
 
   function activateGiant() {
-    nextGiantScore += 20000; giantTimer = 10; player.x = width / 2; player.y = height / 2; shake = 18;
+    nextGiantScore += 20000; giantTimer = 5; player.x = width / 2; player.y = height / 2; shake = 18;
     proteinCooldown = Math.max(proteinCooldown, 10);
-    ui.powerLabel.textContent = '🐾 ГИГАКОТ'; ui.powerTimer.textContent = '10.0'; ui.powerStatus.classList.add('active');
+    ui.powerLabel.textContent = '🐾 ГИГАКОТ'; ui.powerTimer.textContent = '5.0'; ui.powerStatus.classList.add('active');
     cores++; combo = 8; comboTimer = 4; score += 600;
     burst(core.x, core.y, '#6ff7ed', 36); core.x = -1000; core.y = -1000;
     if (protein.active) {
