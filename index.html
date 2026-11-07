@@ -40,12 +40,20 @@
           <span id="boneLabel">🦴 КОСТОЧКИ</span>
           <strong id="boneCount">0/10</strong>
         </div>
+        <div class="level-status" aria-live="polite">
+          <span>УРОВЕНЬ</span>
+          <strong id="levelNumber">1</strong>
+        </div>
+        <div id="levelUp" class="level-up" aria-live="assertive">
+          <span>НОВЫЙ УРОВЕНЬ</span>
+          <strong id="levelUpNumber">2</strong>
+        </div>
 
         <div id="startScreen" class="overlay visible">
           <div class="panel">
             <p class="kicker">СИСТЕМА ГОТОВА</p>
             <h2>Останься<br /><em>в движении.</em></h2>
-            <p class="description">Собирай корм, протеин и косточки. Десять косточек отвлекут собак на 10 секунд, а каждые 20 000 очков включат ГИГАКОТА на 5 секунд.</p>
+            <p class="description">Собирай корм, протеин и косточки. Каждые 5 000 очков начинается новый уровень без изменения сложности. Каждые 20 000 очков включается ГИГАКОТ на 5 секунд.</p>
             <button id="startButton" class="primary-button">НАЧАТЬ ЗАБЕГ <span>→</span></button>
             <p class="controls"><b>WASD / СТРЕЛКИ</b> — движение &nbsp;·&nbsp; <b>P</b> — пауза</p>
           </div>
@@ -66,6 +74,7 @@
             <div class="results">
               <div><span>РЕЗУЛЬТАТ</span><strong id="finalScore">0</strong></div>
               <div><span>МИСКИ</span><strong id="finalCores">0</strong></div>
+              <div><span>УРОВЕНЬ</span><strong id="finalLevel">1</strong></div>
             </div>
             <button id="restartButton" class="primary-button">ЕЩЁ РАЗ <span>↻</span></button>
           </div>
