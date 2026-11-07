@@ -9,14 +9,14 @@
     finalScore: document.querySelector('#finalScore'), finalCores: document.querySelector('#finalCores'), finalLevel: document.querySelector('#finalLevel'), sound: document.querySelector('#soundButton'),
     powerStatus: document.querySelector('#powerStatus'), powerTimer: document.querySelector('#powerTimer'), powerLabel: document.querySelector('#powerLabel'),
     boneStatus: document.querySelector('#boneStatus'), boneLabel: document.querySelector('#boneLabel'), boneCount: document.querySelector('#boneCount'),
-    levelNumber: document.querySelector('#levelNumber'), levelUp: document.querySelector('#levelUp'), levelUpNumber: document.querySelector('#levelUpNumber')
+    levelLabel: document.querySelector('#levelLabel'), levelNumber: document.querySelector('#levelNumber'), levelUp: document.querySelector('#levelUp'), levelUpNumber: document.querySelector('#levelUpNumber')
   };
 
   let width = 900, height = 560, raf = 0, last = 0, state = 'menu', score = 0, cores = 0, combo = 1, comboTimer = 0;
   let muted = false, audio = null, shake = 0, spawnTimer = 0, coreTimer = 0, elapsed = 0, deathTime = 0, killer = null;
   let powerTimer = 0, proteinCooldown = 0, giantTimer = 0, nextGiantScore = 20000;
   let boneCount = 0, boneCooldown = 0, boneFeastTimer = 0;
-  let level = 1, levelFlashTimer = 0;
+  let level = 1, levelFlashTimer = 0, dogBreakTimer = 0;
   const keys = new Set(), enemies = [], particles = [], dogBits = [], baitBones = [], stars = [];
   const player = { x: 0, y: 0, r: 10, speed: 285, trail: [] };
   const core = { x: 0, y: 0, r: 11, pulse: 0 };
@@ -61,7 +61,7 @@
     score = 0; cores = 0; combo = 1; comboTimer = 0; elapsed = 0; spawnTimer = 1.2; coreTimer = 0;
     deathTime = 0; killer = null; powerTimer = 0; proteinCooldown = 7; protein.active = false; giantTimer = 0; nextGiantScore = 20000;
     boneCount = 0; boneCooldown = 2.5; boneFeastTimer = 0; bone.active = false;
-    level = 1; levelFlashTimer = 0; ui.levelNumber.textContent = '1'; ui.levelUp.classList.remove('active');
+    level = 1; levelFlashTimer = 0; dogBreakTimer = 0; ui.levelLabel.textContent = 'УРОВЕНЬ'; ui.levelNumber.textContent = '1'; ui.levelUp.classList.remove('active'); document.querySelector('.level-status').classList.remove('break');
     enemies.length = 0; particles.length = 0; dogBits.length = 0; baitBones.length = 0; player.trail.length = 0; player.x = width / 2; player.y = height / 2;
     ui.powerStatus.classList.remove('active');
     ui.boneStatus.classList.remove('feast'); ui.boneLabel.textContent = '🦴 КОСТОЧКИ'; ui.boneCount.textContent = '0/10';
@@ -155,9 +155,15 @@
   function updateLevel(dt) {
     const nextLevel = Math.floor(score / 5000) + 1;
     if (nextLevel > level) {
-      level = nextLevel; levelFlashTimer = 1.6;
-      ui.levelNumber.textContent = String(level); ui.levelUpNumber.textContent = String(level); ui.levelUp.classList.add('active');
+      level = nextLevel; levelFlashTimer = 1.6; dogBreakTimer = 20; enemies.length = 0;
+      ui.levelUpNumber.textContent = String(level); ui.levelUp.classList.add('active'); document.querySelector('.level-status').classList.add('break');
       tone(520, .11, 'square', .035); setTimeout(() => tone(780, .16, 'triangle', .04), 90);
+    }
+    if (dogBreakTimer > 0) {
+      dogBreakTimer = Math.max(0, dogBreakTimer - dt); ui.levelLabel.textContent = 'БЕЗ СОБАК'; ui.levelNumber.textContent = `${dogBreakTimer.toFixed(1)}с`;
+      if (dogBreakTimer === 0) { ui.levelLabel.textContent = 'УРОВЕНЬ'; ui.levelNumber.textContent = String(level); document.querySelector('.level-status').classList.remove('break'); spawnTimer = .8; }
+    } else {
+      ui.levelNumber.textContent = String(level);
     }
     if (levelFlashTimer > 0) {
       levelFlashTimer = Math.max(0, levelFlashTimer - dt);
@@ -227,7 +233,8 @@
     if (Math.hypot(player.x-core.x, player.y-core.y) < player.r+core.r+4) {
       cores++; combo = Math.min(8, combo + 1); comboTimer = 4; score += 75 * combo; burst(core.x, core.y, '#6ff7ed', 20); tone(420 + combo*55, .11, 'triangle', .035); placeCore(); updateHud();
     }
-    spawnTimer -= dt; if (spawnTimer <= 0) { spawnEnemy(); spawnTimer = Math.max(.34, 1.12 - elapsed*.012); }
+    updateLevel(dt);
+    if (dogBreakTimer <= 0) { spawnTimer -= dt; if (spawnTimer <= 0) { spawnEnemy(); spawnTimer = Math.max(.34, 1.12 - elapsed*.012); } }
     for (let i = enemies.length - 1; i >= 0; i--) {
       const e = enemies[i];
       if (boneFeastTimer > 0 && baitBones.length) {
@@ -258,7 +265,7 @@
     for(let i=particles.length-1;i>=0;i--) if(particles[i].life<=0) particles.splice(i,1);
     dogBits.forEach(p => { p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=210*dt;p.angle+=p.spin*dt;p.life-=dt; });
     for(let i=dogBits.length-1;i>=0;i--) if(dogBits[i].life<=0) dogBits.splice(i,1);
-    updateLevel(dt); updateHud();
+    updateHud();
   }
 
   function drawGrid() {
